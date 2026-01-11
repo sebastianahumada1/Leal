@@ -18,12 +18,27 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const loadUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      try {
+        // Primero intentar obtener la sesión
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Checkout: Error obteniendo sesión:', sessionError);
+          router.push('/auth/login');
+          return;
+        }
+
+        if (!session || !session.user) {
+          console.log('Checkout: No hay sesión, redirigiendo a login');
+          router.push('/auth/login');
+          return;
+        }
+
+        setUserId(session.user.id);
+      } catch (error) {
+        console.error('Checkout: Error inesperado:', error);
         router.push('/auth/login');
-        return;
       }
-      setUserId(user.id);
     };
     loadUser();
   }, [supabase, router]);
