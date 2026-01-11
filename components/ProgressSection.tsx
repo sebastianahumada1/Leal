@@ -62,7 +62,7 @@ export default function ProgressSection({
                 className="aspect-square rounded-full border-2 border-primary/40 flex items-center justify-center bg-primary/10"
               >
                 <span className="material-symbols-outlined text-primary text-2xl">
-                  restaurant
+                  redeem
                 </span>
               </div>
             );
