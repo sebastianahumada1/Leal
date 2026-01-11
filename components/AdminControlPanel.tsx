@@ -184,7 +184,17 @@ export default function AdminControlPanel({ userId }: AdminControlPanelProps) {
           </span>
         </div>
         <h1 className="header-text text-primary text-lg font-bold flex-1 text-center">PANEL DE CONTROL</h1>
-        <div className="flex size-10 items-center justify-end">
+        <div className="flex size-10 items-center justify-end gap-2">
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.push('/auth/login');
+            }}
+            className="text-primary/80 hover:text-primary transition-colors p-2"
+            title="Cerrar sesión"
+          >
+            <span className="material-symbols-outlined text-xl">logout</span>
+          </button>
           <div className="size-8 rounded-full border border-primary overflow-hidden">
             {profilePhoto ? (
               <Image src={profilePhoto} alt="Admin" width={32} height={32} className="w-full h-full object-cover" />
