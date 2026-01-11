@@ -931,24 +931,6 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-primary/20">
-                {selectedVisit.status !== 'approved' && (
-                  <button
-                    onClick={() => handleApproveVisit(selectedVisit.id)}
-                    disabled={processingVisit === selectedVisit.id}
-                    className="flex-1 bg-primary text-forest py-3 rounded-lg header-text font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                  >
-                    {processingVisit === selectedVisit.id ? 'Aprobando...' : 'Aprobar'}
-                  </button>
-                )}
-                {selectedVisit.status !== 'rejected' && (
-                  <button
-                    onClick={() => handleRejectVisit(selectedVisit.id, false)}
-                    disabled={processingVisit === selectedVisit.id}
-                    className="flex-1 border-2 border-red-400/40 text-red-400 py-3 rounded-lg header-text font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                  >
-                    {processingVisit === selectedVisit.id ? 'Rechazando...' : 'Rechazar'}
-                  </button>
-                )}
                 {selectedVisit.status === 'approved' && (
                   <button
                     onClick={() => handleRejectVisit(selectedVisit.id, false)}
