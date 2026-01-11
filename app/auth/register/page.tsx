@@ -68,11 +68,18 @@ export default function RegisterPage() {
 
       console.log('REGISTER: Registrando usuario:', email);
 
+      // Obtener URL de la app para redirección después de confirmación
+      const appUrl = typeof window !== 'undefined' 
+        ? window.location.origin 
+        : process.env.NEXT_PUBLIC_APP_URL || 'https://leal-5t8e.vercel.app';
+      const redirectTo = `${appUrl}/auth/login`;
+
       // Registrar usuario con metadata
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: redirectTo,
           data: {
             full_name: fullName.trim(),
             phone: phone.trim(),
