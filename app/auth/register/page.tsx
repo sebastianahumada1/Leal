@@ -84,7 +84,6 @@ export default function RegisterPage() {
         console.error('REGISTER: Error:', signUpError);
         console.error('REGISTER: Error code:', signUpError.code);
         console.error('REGISTER: Error message:', signUpError.message);
-        console.error('REGISTER: Error details:', signUpError.details);
         
         if (signUpError.message.includes('already registered') || signUpError.message.includes('already been registered')) {
           setError('Este correo ya está registrado. Intenta iniciar sesión.');
