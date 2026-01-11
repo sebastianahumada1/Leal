@@ -29,28 +29,81 @@ export default function ResetPasswordPage() {
 
       try {
         const supabase = createClient();
+        
+        // Escuchar eventos de autenticación para detectar PASSWORD_RECOVERY
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          console.log('RESET_PASSWORD: Auth event:', event);
+          console.log('RESET_PASSWORD: Session:', session ? 'existe' : 'no existe');
+          
+          if (event === 'PASSWORD_RECOVERY' || session) {
+            console.log('RESET_PASSWORD: Token procesado correctamente, sesión disponible');
+            setValidatingToken(false);
+          }
+        });
+
+        // Verificar sesión inicial
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        console.log('RESET_PASSWORD: Sesión inicial:', session ? 'existe' : 'no existe');
+        console.log('RESET_PASSWORD: URL hash:', window.location.hash);
 
         if (sessionError) {
           console.error('RESET_PASSWORD: Error obteniendo sesión:', sessionError);
-          setError('Token inválido o expirado. Por favor solicita un nuevo enlace de recuperación.');
-          setValidatingToken(false);
-          return;
+          console.error('RESET_PASSWORD: Error code:', sessionError.code);
+          console.error('RESET_PASSWORD: Error message:', sessionError.message);
         }
 
-        if (!session) {
-          // No hay sesión, verificar si hay un hash en la URL (token)
-          // Supabase procesa automáticamente el hash cuando se carga la página
-          // Esperar un momento para que Supabase procese el hash
-          setTimeout(async () => {
-            const { data: { session: retrySession }, error: retryError } = await supabase.auth.getSession();
-            if (retryError || !retrySession) {
-              setError('Token inválido o expirado. Por favor solicita un nuevo enlace de recuperación.');
-            }
-            setValidatingToken(false);
-          }, 1000);
-        } else {
+        if (session) {
+          // Ya hay sesión, el token fue procesado
+          console.log('RESET_PASSWORD: Sesión encontrada, usuario:', session.user.id);
           setValidatingToken(false);
+          subscription.unsubscribe();
+        } else {
+          // No hay sesión aún, esperar a que Supabase procese el hash
+          // Si hay hash en la URL, Supabase lo procesará automáticamente
+          const hasHash = window.location.hash && window.location.hash.length > 0;
+          console.log('RESET_PASSWORD: No hay sesión inicial, hash presente:', hasHash);
+          
+          if (hasHash) {
+            // Esperar a que Supabase procese el hash (máximo 3 segundos)
+            let retries = 0;
+            const maxRetries = 6; // 3 segundos total (500ms * 6)
+            
+            const checkInterval = setInterval(async () => {
+              retries++;
+              const { data: { session: retrySession }, error: retryError } = await supabase.auth.getSession();
+              
+              console.log(`RESET_PASSWORD: Intento ${retries}/${maxRetries}, sesión:`, retrySession ? 'existe' : 'no existe');
+              
+              if (retrySession) {
+                console.log('RESET_PASSWORD: Sesión encontrada después de procesar hash');
+                setValidatingToken(false);
+                clearInterval(checkInterval);
+                subscription.unsubscribe();
+              } else if (retries >= maxRetries) {
+                console.error('RESET_PASSWORD: Timeout esperando sesión');
+                if (retryError) {
+                  console.error('RESET_PASSWORD: Error en retry:', retryError);
+                }
+                setError('Token inválido o expirado. Por favor solicita un nuevo enlace de recuperación.');
+                setValidatingToken(false);
+                clearInterval(checkInterval);
+                subscription.unsubscribe();
+              }
+            }, 500);
+            
+            // Cleanup
+            return () => {
+              clearInterval(checkInterval);
+              subscription.unsubscribe();
+            };
+          } else {
+            // No hay hash, el token no está presente
+            console.error('RESET_PASSWORD: No hay hash en la URL');
+            setError('Token inválido o expirado. Por favor solicita un nuevo enlace de recuperación.');
+            setValidatingToken(false);
+            subscription.unsubscribe();
+          }
         }
       } catch (err) {
         console.error('RESET_PASSWORD: Error validando token:', err);
@@ -103,16 +156,32 @@ export default function ResetPasswordPage() {
       console.log('RESET_PASSWORD: Actualizando contraseña para usuario:', session.user.id);
 
       // Actualizar contraseña
-      const { error: updateError } = await supabase.auth.updateUser({
+      console.log('RESET_PASSWORD: Intentando actualizar contraseña...');
+      const { data: updateData, error: updateError } = await supabase.auth.updateUser({
         password: password,
       });
 
       if (updateError) {
         console.error('RESET_PASSWORD: Error actualizando contraseña:', updateError);
-        setError(updateError.message || 'Error al actualizar la contraseña. Por favor intenta de nuevo.');
+        console.error('RESET_PASSWORD: Error code:', updateError.code);
+        console.error('RESET_PASSWORD: Error message:', updateError.message);
+        console.error('RESET_PASSWORD: Error status:', updateError.status);
+        console.error('RESET_PASSWORD: Error details:', JSON.stringify(updateError, null, 2));
+        
+        let errorMessage = updateError.message || 'Error al actualizar la contraseña. Por favor intenta de nuevo.';
+        
+        if (updateError.message?.includes('session')) {
+          errorMessage = 'La sesión ha expirado. Por favor solicita un nuevo enlace de recuperación.';
+        } else if (updateError.code === 'invalid_credentials') {
+          errorMessage = 'Token inválido o expirado. Por favor solicita un nuevo enlace de recuperación.';
+        }
+        
+        setError(errorMessage);
         setLoading(false);
         return;
       }
+
+      console.log('RESET_PASSWORD: Contraseña actualizada exitosamente:', updateData);
 
       console.log('RESET_PASSWORD: Contraseña actualizada exitosamente');
       setSuccess(true);
