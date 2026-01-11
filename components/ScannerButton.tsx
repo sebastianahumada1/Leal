@@ -79,22 +79,30 @@ export default function ScannerButton({ userId }: ScannerButtonProps) {
           (decodedText: string) => {
             // QR escaneado exitosamente
             let locationCode = decodedText;
+            let targetUrl = '';
             
+            // Si el QR contiene una URL completa, extraer solo el locationCode
             if (decodedText.includes('/checkout/')) {
               const parts = decodedText.split('/checkout/');
-              locationCode = parts[parts.length - 1];
+              locationCode = parts[parts.length - 1].split('/')[0].split('?')[0]; // Remover query params y slashes
+              targetUrl = `/checkout/${locationCode}`;
             } else if (decodedText.includes('checkout')) {
               const parts = decodedText.split('checkout');
-              locationCode = parts[parts.length - 1].replace(/[\/]/g, '');
+              locationCode = parts[parts.length - 1].replace(/[\/]/g, '').split('?')[0];
+              targetUrl = `/checkout/${locationCode}`;
+            } else {
+              // Si es solo el código, usar directamente
+              locationCode = decodedText.trim();
+              targetUrl = `/checkout/${locationCode}`;
             }
 
-            // Detener escaneo y redirigir
+            // Detener escaneo y redirigir usando window.location para recarga completa
             html5QrCode.stop().then(() => {
               setScanning(false);
-              router.push(`/checkout/${locationCode}`);
+              window.location.href = targetUrl;
             }).catch(() => {
               setScanning(false);
-              router.push(`/checkout/${locationCode}`);
+              window.location.href = targetUrl;
             });
           },
           (errorMessage: string) => {
@@ -120,22 +128,28 @@ export default function ScannerButton({ userId }: ScannerButtonProps) {
               (decodedText: string) => {
                 // QR escaneado exitosamente
                 let locationCode = decodedText;
+                let targetUrl = '';
                 
                 if (decodedText.includes('/checkout/')) {
                   const parts = decodedText.split('/checkout/');
-                  locationCode = parts[parts.length - 1];
+                  locationCode = parts[parts.length - 1].split('/')[0].split('?')[0];
+                  targetUrl = `/checkout/${locationCode}`;
                 } else if (decodedText.includes('checkout')) {
                   const parts = decodedText.split('checkout');
-                  locationCode = parts[parts.length - 1].replace(/[\/]/g, '');
+                  locationCode = parts[parts.length - 1].replace(/[\/]/g, '').split('?')[0];
+                  targetUrl = `/checkout/${locationCode}`;
+                } else {
+                  locationCode = decodedText.trim();
+                  targetUrl = `/checkout/${locationCode}`;
                 }
 
-                // Detener escaneo y redirigir
+                // Detener escaneo y redirigir usando window.location para recarga completa
                 html5QrCode.stop().then(() => {
                   setScanning(false);
-                  router.push(`/checkout/${locationCode}`);
+                  window.location.href = targetUrl;
                 }).catch(() => {
                   setScanning(false);
-                  router.push(`/checkout/${locationCode}`);
+                  window.location.href = targetUrl;
                 });
               },
               (errorMessage: string) => {
@@ -154,21 +168,27 @@ export default function ScannerButton({ userId }: ScannerButtonProps) {
               },
               (decodedText: string) => {
                 let locationCode = decodedText;
+                let targetUrl = '';
                 
                 if (decodedText.includes('/checkout/')) {
                   const parts = decodedText.split('/checkout/');
-                  locationCode = parts[parts.length - 1];
+                  locationCode = parts[parts.length - 1].split('/')[0].split('?')[0];
+                  targetUrl = `/checkout/${locationCode}`;
                 } else if (decodedText.includes('checkout')) {
                   const parts = decodedText.split('checkout');
-                  locationCode = parts[parts.length - 1].replace(/[\/]/g, '');
+                  locationCode = parts[parts.length - 1].replace(/[\/]/g, '').split('?')[0];
+                  targetUrl = `/checkout/${locationCode}`;
+                } else {
+                  locationCode = decodedText.trim();
+                  targetUrl = `/checkout/${locationCode}`;
                 }
 
                 html5QrCode.stop().then(() => {
                   setScanning(false);
-                  router.push(`/checkout/${locationCode}`);
+                  window.location.href = targetUrl;
                 }).catch(() => {
                   setScanning(false);
-                  router.push(`/checkout/${locationCode}`);
+                  window.location.href = targetUrl;
                 });
               },
               (errorMessage: string) => {
@@ -279,12 +299,23 @@ export default function ScannerButton({ userId }: ScannerButtonProps) {
           const scanner = new Html5QrcodeClass('temp-scanner');
           const result = await scanner.scanFile(file, true);
           let locationCode = result;
+          let targetUrl = '';
+          
           if (result.includes('/checkout/')) {
             const parts = result.split('/checkout/');
-            locationCode = parts[parts.length - 1];
+            locationCode = parts[parts.length - 1].split('/')[0].split('?')[0];
+            targetUrl = `/checkout/${locationCode}`;
+          } else if (result.includes('checkout')) {
+            const parts = result.split('checkout');
+            locationCode = parts[parts.length - 1].replace(/[\/]/g, '').split('?')[0];
+            targetUrl = `/checkout/${locationCode}`;
+          } else {
+            locationCode = result.trim();
+            targetUrl = `/checkout/${locationCode}`;
           }
+          
           await scanner.clear();
-          router.push(`/checkout/${locationCode}`);
+          window.location.href = targetUrl;
         } catch (err: any) {
           setError(err.message || 'No se pudo leer el código QR de la imagen');
         }
