@@ -191,7 +191,7 @@ export default function CheckoutPage() {
           </button>
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.push('/')}
             className="header-text text-primary/50 text-[11px] font-bold tracking-[0.2em] border-b border-primary/20 pb-1 hover:text-primary transition-colors uppercase"
           >
             Cancelar Operación
