@@ -16,7 +16,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const MIN_AMOUNT = 29000;
+  const MIN_AMOUNT = 30000;
 
   useEffect(() => {
     const loadUser = async () => {
@@ -153,7 +153,7 @@ export default function CheckoutPage() {
               inputMode="numeric"
               value={displayAmount}
               onChange={(e) => formatAmountInput(e.target.value)}
-              placeholder="29.000"
+              placeholder="30.000"
               className="bg-transparent border-2 border-primary text-primary focus:ring-1 focus:ring-primary focus:border-primary placeholder-primary/40 p-4 pl-16 w-full font-mono text-2xl text-center tracking-wider"
               required
               autoFocus
