@@ -38,18 +38,37 @@ export default function ForgotPasswordPage() {
       const redirectTo = `${appUrl}/auth/reset-password`;
 
       // Enviar email de reset
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      console.log('FORGOT_PASSWORD: URL de redirect:', redirectTo);
+      const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
       });
 
       if (resetError) {
-        console.error('FORGOT_PASSWORD: Error:', resetError);
-        setError(resetError.message === 'For security purposes, you can only request this once every 60 seconds'
-          ? 'Por favor espera 60 segundos antes de solicitar otro reset'
-          : resetError.message);
+        console.error('FORGOT_PASSWORD: Error completo:', resetError);
+        console.error('FORGOT_PASSWORD: Error code:', resetError.code);
+        console.error('FORGOT_PASSWORD: Error message:', resetError.message);
+        console.error('FORGOT_PASSWORD: Error status:', resetError.status);
+        console.error('FORGOT_PASSWORD: Error details:', JSON.stringify(resetError, null, 2));
+        
+        // Mensajes de error más específicos
+        let errorMessage = resetError.message || 'Error desconocido';
+        
+        if (resetError.message?.includes('For security purposes, you can only request this once every 60 seconds')) {
+          errorMessage = 'Por favor espera 60 segundos antes de solicitar otro reset';
+        } else if (resetError.message?.includes('recovery email') || resetError.message?.includes('Error sending')) {
+          errorMessage = `Error al enviar email: ${resetError.message}. Verifica: 1) Que el email esté registrado, 2) Configuración SMTP en Supabase, 3) Revisa los logs en Supabase Dashboard → Authentication → Logs`;
+        } else if (resetError.code === 'email_not_confirmed') {
+          errorMessage = 'El email no ha sido confirmado. Por favor confirma tu email primero.';
+        } else if (resetError.code === 'user_not_found') {
+          errorMessage = 'No existe una cuenta con este email. Verifica que el email sea correcto.';
+        }
+        
+        setError(errorMessage);
         setLoading(false);
         return;
       }
+
+      console.log('FORGOT_PASSWORD: Respuesta exitosa:', data);
 
       console.log('FORGOT_PASSWORD: Email de reset enviado exitosamente');
       setSuccess(true);
