@@ -17,9 +17,7 @@ export default function ProgressSection({
   progressPercentage,
   stamps = [],
 }: ProgressSectionProps) {
-  // Siempre mostrar 8 círculos (7 sellos + 1 recompensa)
-  const totalStampsDisplay = 8;
-  const stampsDisplay = Array.from({ length: totalStampsDisplay }, (_, i) => i + 1);
+  const stampsDisplay = Array.from({ length: requiredStamps }, (_, i) => i + 1);
   
   // Obtener stamps pendientes para mostrar visualmente
   const pendingStamps = stamps.filter(s => s.status === 'pending');
@@ -29,7 +27,7 @@ export default function ProgressSection({
   // Usa currentStamps (del campo current_stamps del perfil) como fuente de verdad
   const getStampStatus = (index: number): 'empty' | 'pending' | 'approved' | 'rejected' | 'reward' => {
     // El último círculo siempre es la recompensa
-    if (index + 1 === totalStampsDisplay) {
+    if (index + 1 === requiredStamps) {
       return 'reward';
     }
 
@@ -51,7 +49,7 @@ export default function ProgressSection({
 
   return (
     <>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {stampsDisplay.map((stampNum, index) => {
           const status = getStampStatus(index);
 
@@ -62,7 +60,7 @@ export default function ProgressSection({
                 className="aspect-square rounded-full border-2 border-primary/40 flex items-center justify-center bg-primary/10"
               >
                 <span className="material-symbols-outlined text-primary text-2xl">
-                  redeem
+                  restaurant
                 </span>
               </div>
             );

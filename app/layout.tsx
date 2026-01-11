@@ -32,9 +32,6 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'LEAL',
   },
-  icons: {
-    apple: '/icons/apple-touch-icon.png',
-  },
   // Usar mobile-web-app-capable en lugar de apple-mobile-web-app-capable (deprecado)
   other: {
     'mobile-web-app-capable': 'yes',

@@ -3,17 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
+import Image from 'next/image';
 
 export default function CheckoutPage() {
   const router = useRouter();
   const params = useParams();
-  const locationCode = (params?.locationCode as string) || '';
+  const locationCode = params.locationCode as string;
   const supabase = createClient();
 
   const [amount, setAmount] = useState('');
+  const [displayAmount, setDisplayAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const MIN_AMOUNT = 29000;
 
   useEffect(() => {
     const loadUser = async () => {
@@ -38,15 +41,24 @@ export default function CheckoutPage() {
       return;
     }
 
-    const amountNum = parseFloat(amount);
+    // Convertir el valor formateado (con puntos) a número
+    const cleanAmount = amount.replace(/\./g, '');
+    const amountNum = parseFloat(cleanAmount);
+    
     if (isNaN(amountNum) || amountNum <= 0) {
       setError('Por favor ingresa un monto válido');
       setLoading(false);
       return;
     }
 
-    if (amountNum > 1000000) {
-      setError('El monto máximo es $1,000,000');
+    if (amountNum < MIN_AMOUNT) {
+      setError(`El monto mínimo es $${MIN_AMOUNT.toLocaleString('es-CO')}`);
+      setLoading(false);
+      return;
+    }
+
+    if (amountNum > 999999.99) {
+      setError('El monto máximo es $999.999');
       setLoading(false);
       return;
     }
@@ -77,19 +89,27 @@ export default function CheckoutPage() {
     }
   };
 
-  const formatAmount = (value: string) => {
-    // Remover caracteres no numéricos excepto punto decimal
-    const cleaned = value.replace(/[^\d.]/g, '');
-    // Permitir solo un punto decimal
-    const parts = cleaned.split('.');
-    if (parts.length > 2) {
-      return parts[0] + '.' + parts.slice(1).join('');
+  const formatAmountInput = (value: string) => {
+    // Remover todo excepto números
+    const numbersOnly = value.replace(/\D/g, '');
+    
+    // Si está vacío, retornar vacío
+    if (!numbersOnly) {
+      setAmount('');
+      setDisplayAmount('');
+      return;
     }
-    // Limitar a 2 decimales
-    if (parts[1] && parts[1].length > 2) {
-      return parts[0] + '.' + parts[1].substring(0, 2);
-    }
-    return cleaned;
+
+    // Convertir a número para formatear
+    const numValue = parseInt(numbersOnly, 10);
+    
+    // Formatear con puntos como separador de miles (formato colombiano)
+    const formatted = numValue.toLocaleString('es-CO');
+    
+    // Guardar valor numérico sin formato para el submit
+    setAmount(numbersOnly);
+    // Guardar valor formateado para mostrar
+    setDisplayAmount(formatted);
   };
 
   return (
@@ -130,11 +150,10 @@ export default function CheckoutPage() {
             <input
               id="amount"
               type="text"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(formatAmount(e.target.value))}
-              placeholder="00.00"
-              step="0.01"
+              inputMode="numeric"
+              value={displayAmount}
+              onChange={(e) => formatAmountInput(e.target.value)}
+              placeholder="29.000"
               className="bg-transparent border-2 border-primary text-primary focus:ring-1 focus:ring-primary focus:border-primary placeholder-primary/40 p-4 pl-16 w-full font-mono text-2xl text-center tracking-wider"
               required
               autoFocus
@@ -147,6 +166,9 @@ export default function CheckoutPage() {
             </span>
           </div>
           <p className="font-mono text-[10px] text-center uppercase tracking-widest opacity-50 mt-2">
+            Monto mínimo: ${MIN_AMOUNT.toLocaleString('es-CO')}
+          </p>
+          <p className="font-mono text-[10px] text-center uppercase tracking-widest opacity-50 mt-1">
             Valide el monto con el personal
           </p>
           {error && (

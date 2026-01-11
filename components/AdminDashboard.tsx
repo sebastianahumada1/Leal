@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 import { usePolling } from '@/lib/hooks/usePolling';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 
 interface AdminDashboardProps {
   userId: string;
@@ -50,8 +50,6 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
   const [processingVisit, setProcessingVisit] = useState<string | null>(null);
   const [processingRedemption, setProcessingRedemption] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<Metrics>({ totalApprovedToday: 0, totalPending: 0, totalPendingRedemptions: 0 });
-  const [selectedVisit, setSelectedVisit] = useState<PendingVisit | null>(null);
-  const [showVisitModal, setShowVisitModal] = useState(false);
 
   const loadPendingVisits = useCallback(async () => {
     try {
@@ -320,12 +318,7 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
       console.log('AdminDashboard: Visita aprobada exitosamente:', data);
 
       await loadPendingVisits();
-      await loadHistoryVisits();
       await loadMetrics();
-      if (showVisitModal) {
-        setShowVisitModal(false);
-        setSelectedVisit(null);
-      }
     } catch (error: any) {
       console.error('AdminDashboard: Error approving visit:', error);
       alert('Error al aprobar la visita: ' + (error.message || 'Error desconocido'));
@@ -334,8 +327,8 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
     }
   };
 
-  const handleRejectVisit = async (visitId: string, skipConfirm = false) => {
-    if (!skipConfirm && !confirm('¿Estás seguro de que deseas rechazar esta visita?')) {
+  const handleRejectVisit = async (visitId: string) => {
+    if (!confirm('¿Estás seguro de que deseas rechazar esta visita?')) {
       return;
     }
 
@@ -359,12 +352,7 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
       console.log('AdminDashboard: Visita rechazada exitosamente:', data);
 
       await loadPendingVisits();
-      await loadHistoryVisits();
       await loadMetrics();
-      if (showVisitModal) {
-        setShowVisitModal(false);
-        setSelectedVisit(null);
-      }
     } catch (error: any) {
       console.error('AdminDashboard: Error rejecting visit:', error);
       alert('Error al rechazar la visita: ' + (error.message || 'Error desconocido'));
@@ -397,8 +385,9 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
         return;
       }
 
-      // 2. Actualizar el user_reward como aprobado (NO eliminamos los stamps)
-      // Los stamps se mantienen en la tabla, solo se descuentan del conteo
+      // 2. Actualizar el user_reward como aprobado
+      // El trigger trigger_recalculate_stamp_count_on_reward recalcula automáticamente
+      // current_stamps cuando el status cambia a 'approved'
       const { error: updateError } = await supabase
         .from('user_rewards')
         .update({
@@ -409,34 +398,7 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
 
       if (updateError) throw updateError;
 
-      // 3. Recalcular current_stamps usando función RPC (stamps aprobados - required_stamps de recompensas aprobadas)
-      console.log('AdminDashboard: Llamando a update_user_stamp_count para usuario:', redemption.user_id);
-      const { data: rpcData, error: updateStampsError } = await supabase.rpc('update_user_stamp_count', {
-        user_id_param: redemption.user_id
-      });
-
-      if (updateStampsError) {
-        console.error('AdminDashboard: Error actualizando current_stamps con RPC:', updateStampsError);
-        console.error('AdminDashboard: Detalles del error:', JSON.stringify(updateStampsError, null, 2));
-        
-        // Verificar el perfil después del error
-        const { data: profileAfterError } = await supabase
-          .from('profiles')
-          .select('current_stamps')
-          .eq('id', redemption.user_id)
-          .single();
-        console.log('AdminDashboard: current_stamps después del error:', profileAfterError?.current_stamps);
-      } else {
-        console.log('AdminDashboard: RPC ejecutado exitosamente');
-        
-        // Verificar que se actualizó correctamente
-        const { data: profileAfterUpdate } = await supabase
-          .from('profiles')
-          .select('current_stamps')
-          .eq('id', redemption.user_id)
-          .single();
-        console.log(`AdminDashboard: Canje aprobado. current_stamps actualizado a: ${profileAfterUpdate?.current_stamps}`);
-      }
+      console.log(`AdminDashboard: Canje aprobado exitosamente. current_stamps será recalculado automáticamente por el trigger`);
 
       await loadPendingRedemptions();
       await loadMetrics();
@@ -494,15 +456,6 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
       style: 'currency',
       currency: 'MXN',
     }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, "d 'de' MMMM, yyyy 'a las' HH:mm");
-    } catch {
-      return dateString;
-    }
   };
 
   return (
@@ -752,11 +705,7 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
                   return (
                     <div
                       key={visit.id}
-                      onClick={() => {
-                        setSelectedVisit(visit);
-                        setShowVisitModal(true);
-                      }}
-                      className={`bg-forest/40 rounded-2xl p-5 border-2 dotted-border relative overflow-hidden cursor-pointer hover:bg-forest/50 transition-colors ${
+                      className={`bg-forest/40 rounded-2xl p-5 border-2 dotted-border relative overflow-hidden ${
                         isApproved ? 'border-primary/50' : isRejected ? 'border-red-400/30 opacity-75' : ''
                       }`}
                     >
@@ -838,122 +787,6 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
           <div className="w-32 h-1.5 bg-primary/10 rounded-full"></div>
         </div>
       </section>
-
-      {/* Modal de Detalle de Visita */}
-      {showVisitModal && selectedVisit && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowVisitModal(false);
-              setSelectedVisit(null);
-            }
-          }}
-        >
-          <div className="bg-forest rounded-2xl p-6 border-2 border-primary/30 max-w-md w-full relative z-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="header-text text-lg font-bold text-primary uppercase tracking-wider">
-                Detalle de Visita
-              </h3>
-              <button
-                onClick={() => {
-                  setShowVisitModal(false);
-                  setSelectedVisit(null);
-                }}
-                className="material-symbols-outlined text-primary cursor-pointer hover:text-primary/70"
-              >
-                close
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 pb-4 border-b border-primary/20">
-                <div className={`size-14 rounded-full bg-background-dark flex items-center justify-center border-2 ${
-                  selectedVisit.status === 'approved' ? 'border-primary/30' : selectedVisit.status === 'rejected' ? 'border-red-400/30' : 'border-primary/30'
-                }`}>
-                  <span className={`material-symbols-outlined text-2xl ${
-                    selectedVisit.status === 'approved' ? 'text-primary' : selectedVisit.status === 'rejected' ? 'text-red-400' : 'text-primary'
-                  }`}>
-                    {selectedVisit.status === 'approved' ? 'check_circle' : selectedVisit.status === 'rejected' ? 'cancel' : 'pending'}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <h4 className="header-text text-base font-bold text-primary">
-                    {selectedVisit.user_name || 'Usuario Desconocido'}
-                  </h4>
-                  <p className="text-xs text-primary/60 uppercase tracking-tighter mt-1">
-                    ID: {selectedVisit.member_number || selectedVisit.user_id.substring(0, 8)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="bg-background-dark/40 p-4 rounded-xl border border-primary/10">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary/50 mb-2">
-                    Monto de la Compra
-                  </p>
-                  <p className="header-text text-2xl font-bold text-primary">
-                    {formatCurrency(selectedVisit.amount)}
-                  </p>
-                </div>
-
-                <div className="bg-background-dark/40 p-4 rounded-xl border border-primary/10">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary/50 mb-2">
-                    Estado Actual
-                  </p>
-                  <p className={`text-sm font-bold ${
-                    selectedVisit.status === 'approved' ? 'text-primary' : selectedVisit.status === 'rejected' ? 'text-red-400' : 'text-primary/70'
-                  }`}>
-                    {selectedVisit.status === 'approved' ? '✓ Aprobado' : selectedVisit.status === 'rejected' ? '✗ Rechazado' : '⏳ Pendiente'}
-                  </p>
-                </div>
-
-                <div className="bg-background-dark/40 p-4 rounded-xl border border-primary/10">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary/50 mb-2">
-                    Local
-                  </p>
-                  <p className="text-sm text-primary font-sans">
-                    {selectedVisit.location_code?.toUpperCase() || 'N/A'}
-                  </p>
-                </div>
-
-                <div className="bg-background-dark/40 p-4 rounded-xl border border-primary/10">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary/50 mb-2">
-                    Fecha y Hora
-                  </p>
-                  <p className="text-sm text-primary font-sans">
-                    {formatDate(selectedVisit.created_at)}
-                  </p>
-                  <p className="text-xs text-primary/60 mt-1">
-                    {formatTimeAgo(selectedVisit.created_at)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-primary/20">
-                {selectedVisit.status === 'approved' && (
-                  <button
-                    onClick={() => handleRejectVisit(selectedVisit.id, false)}
-                    disabled={processingVisit === selectedVisit.id}
-                    className="flex-1 border-2 border-red-400/40 text-red-400 py-3 rounded-lg header-text font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                  >
-                    {processingVisit === selectedVisit.id ? 'Cambiando...' : 'Cambiar a Rechazado'}
-                  </button>
-                )}
-                {selectedVisit.status === 'rejected' && (
-                  <button
-                    onClick={() => handleApproveVisit(selectedVisit.id)}
-                    disabled={processingVisit === selectedVisit.id}
-                    className="flex-1 bg-primary text-forest py-3 rounded-lg header-text font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform disabled:opacity-50"
-                  >
-                    {processingVisit === selectedVisit.id ? 'Cambiando...' : 'Cambiar a Aprobado'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

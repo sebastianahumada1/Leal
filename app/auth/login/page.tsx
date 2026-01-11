@@ -145,12 +145,12 @@ export default function LoginPage() {
             )}
 
             <div className="flex justify-end px-1 pt-1 pb-2">
-              <a
-                href="#"
+              <Link
+                href="/auth/forgot-password"
                 className="text-primary/80 text-sm font-body hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4"
               >
                 ¿Olvidaste tu contraseña?
-              </a>
+              </Link>
             </div>
 
             <div className="pt-2 pb-1">
