@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
-import Image from 'next/image';
 
 export default function CheckoutPage() {
   const router = useRouter();
   const params = useParams();
-  const locationCode = params.locationCode as string;
+  const locationCode = (params?.locationCode as string) || '';
   const supabase = createClient();
 
   const [amount, setAmount] = useState('');
@@ -18,27 +17,12 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const loadUser = async () => {
-      try {
-        // Primero intentar obtener la sesión
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Checkout: Error obteniendo sesión:', sessionError);
-          router.push('/auth/login');
-          return;
-        }
-
-        if (!session || !session.user) {
-          console.log('Checkout: No hay sesión, redirigiendo a login');
-          router.push('/auth/login');
-          return;
-        }
-
-        setUserId(session.user.id);
-      } catch (error) {
-        console.error('Checkout: Error inesperado:', error);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         router.push('/auth/login');
+        return;
       }
+      setUserId(user.id);
     };
     loadUser();
   }, [supabase, router]);
@@ -61,8 +45,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (amountNum > 99999.99) {
-      setError('El monto máximo es $99,999.99');
+    if (amountNum > 1000000) {
+      setError('El monto máximo es $1,000,000');
       setLoading(false);
       return;
     }
