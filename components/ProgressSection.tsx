@@ -25,9 +25,13 @@ export default function ProgressSection({
   
   // Función para obtener el estado del sello en una posición
   // Usa currentStamps (del campo current_stamps del perfil) como fuente de verdad
-  const getStampStatus = (index: number): 'empty' | 'pending' | 'approved' | 'rejected' | 'reward' => {
-    // El último círculo siempre es la recompensa
+  const getStampStatus = (index: number): 'empty' | 'pending' | 'approved' | 'rejected' | 'reward' | 'reward_filled' => {
+    // El último círculo es la recompensa
     if (index + 1 === requiredStamps) {
+      // Si el usuario ya tiene 8 sellos, la recompensa se llena
+      if (currentStamps >= requiredStamps) {
+        return 'reward_filled';
+      }
       return 'reward';
     }
 
@@ -49,9 +53,22 @@ export default function ProgressSection({
 
   return (
     <>
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {stampsDisplay.map((stampNum, index) => {
           const status = getStampStatus(index);
+
+          if (status === 'reward_filled') {
+            return (
+              <div
+                key={stampNum}
+                className="aspect-square flex items-center justify-center bg-primary rounded-full border-2 border-primary"
+              >
+                <span className="material-symbols-outlined text-forest text-2xl">
+                  redeem
+                </span>
+              </div>
+            );
+          }
 
           if (status === 'reward') {
             return (
@@ -60,7 +77,7 @@ export default function ProgressSection({
                 className="aspect-square rounded-full border-2 border-primary/40 flex items-center justify-center bg-primary/10"
               >
                 <span className="material-symbols-outlined text-primary text-2xl">
-                  restaurant
+                  redeem
                 </span>
               </div>
             );
