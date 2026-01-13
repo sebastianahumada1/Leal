@@ -77,10 +77,11 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
         setCurrentStamps(approvedCount);
       }
 
-      // Cargar todas las recompensas configuradas
+      // Cargar todas las recompensas activas configuradas
       const { data: rewardsData } = await supabase
         .from('rewards')
         .select('*')
+        .eq('active', true)
         .order('required_stamps', { ascending: true });
 
       setRewards(rewardsData || []);

@@ -27,39 +27,6 @@ export default function UserDashboard({ userId }: UserDashboardProps) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  // Función para regalar sello de bienvenida si es el primer inicio de sesión
-  const giveWelcomeStamp = useCallback(async () => {
-    try {
-      // Verificar si el usuario ya tiene sellos
-      const { count: stampsCount } = await supabase
-        .from('stamps')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
-
-      // Si no tiene sellos, es su primera vez - regalar un sello de bienvenida
-      if ((stampsCount || 0) === 0) {
-        console.log('UserDashboard: Regalando sello de bienvenida al usuario nuevo');
-        
-        const { error: insertError } = await supabase
-          .from('stamps')
-          .insert({
-            user_id: userId,
-            status: 'approved', // Sello aprobado directamente como regalo de bienvenida
-          });
-
-        if (insertError) {
-          console.error('UserDashboard: Error regalando sello de bienvenida:', insertError);
-        } else {
-          console.log('UserDashboard: Sello de bienvenida regalado exitosamente');
-          return true; // Retornar true para indicar que se creó el sello
-        }
-      }
-    } catch (error) {
-      console.error('UserDashboard: Error verificando sello de bienvenida:', error);
-    }
-    return false;
-  }, [userId, supabase]);
-
   const loadData = useCallback(async () => {
     // Cargar perfil (incluye current_stamps)
     const { data: profileData, error: profileError } = await supabase
@@ -109,20 +76,9 @@ export default function UserDashboard({ userId }: UserDashboardProps) {
     setLoading(false);
   }, [userId, supabase]);
 
-  // Función para cargar datos y verificar sello de bienvenida
-  const loadDataAndCheckWelcome = useCallback(async () => {
-    await loadData();
-    // Después de cargar datos, verificar si necesita sello de bienvenida
-    const stampCreated = await giveWelcomeStamp();
-    // Si se creó un sello de bienvenida, recargar datos para mostrarlo
-    if (stampCreated) {
-      await loadData();
-    }
-  }, [loadData, giveWelcomeStamp]);
-
   useEffect(() => {
-    loadDataAndCheckWelcome();
-  }, [loadDataAndCheckWelcome]);
+    loadData();
+  }, [loadData]);
 
   // Polling para actualizar sellos cada 5 segundos
   usePolling(loadData, { interval: 5000, enabled: !loading });

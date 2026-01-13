@@ -46,6 +46,7 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'redemptions'>('pending');
   const [pendingVisits, setPendingVisits] = useState<PendingVisit[]>([]);
   const [historyVisits, setHistoryVisits] = useState<PendingVisit[]>([]);
+  const [approvedRedemptions, setApprovedRedemptions] = useState<PendingRedemption[]>([]);
   const [pendingRedemptions, setPendingRedemptions] = useState<PendingRedemption[]>([]);
   const [processingVisit, setProcessingVisit] = useState<string | null>(null);
   const [processingRedemption, setProcessingRedemption] = useState<string | null>(null);
@@ -176,6 +177,83 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
     }
   }, [supabase]);
 
+  const loadApprovedRedemptions = useCallback(async () => {
+    console.log('AdminDashboard: Cargando canjes realizados...');
+    try {
+      const { data: redemptions, error: redemptionsError } = await supabase
+        .from('user_rewards')
+        .select('id, user_id, reward_id, created_at, status, redeemed_at')
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (redemptionsError) {
+        console.error('AdminDashboard: Error loading approved redemptions:', redemptionsError);
+        return;
+      }
+
+      if (!redemptions || redemptions.length === 0) {
+        setApprovedRedemptions([]);
+        return;
+      }
+
+      const userIds = [...new Set(redemptions.map((r: any) => r.user_id))];
+      const rewardIds = [...new Set(redemptions.map((r: any) => r.reward_id))];
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, member_number')
+        .in('id', userIds);
+
+      const { data: rewards } = await supabase
+        .from('rewards')
+        .select('id, name, icon, required_stamps')
+        .in('id', rewardIds);
+
+      const userNamesMap = new Map<string, { name: string; memberNumber: string }>();
+      (profiles || []).forEach((profile: any) => {
+        if (profile.id) {
+          userNamesMap.set(profile.id, {
+            name: profile.full_name || 'Usuario',
+            memberNumber: profile.member_number || 'N/A'
+          });
+        }
+      });
+
+      const rewardsMap = new Map<string, { name: string; icon: string; required_stamps: number }>();
+      (rewards || []).forEach((reward: any) => {
+        if (reward.id) {
+          rewardsMap.set(reward.id, {
+            name: reward.name,
+            icon: reward.icon || 'redeem',
+            required_stamps: reward.required_stamps
+          });
+        }
+      });
+
+      const formattedRedemptions: PendingRedemption[] = (redemptions || []).map((redemption: any) => {
+        const userInfo = userNamesMap.get(redemption.user_id);
+        const rewardInfo = rewardsMap.get(redemption.reward_id);
+        return {
+          id: redemption.id,
+          user_id: redemption.user_id,
+          reward_id: redemption.reward_id,
+          created_at: redemption.redeemed_at || redemption.created_at,
+          user_name: userInfo?.name,
+          member_number: userInfo?.memberNumber,
+          reward_name: rewardInfo?.name,
+          reward_icon: rewardInfo?.icon,
+          required_stamps: rewardInfo?.required_stamps,
+          status: 'approved',
+        };
+      });
+
+      setApprovedRedemptions(formattedRedemptions);
+      console.log('AdminDashboard: Canjes realizados cargados:', formattedRedemptions.length);
+    } catch (error) {
+      console.error('AdminDashboard: Error loading approved redemptions:', error);
+    }
+  }, [supabase]);
+
   const loadPendingRedemptions = useCallback(async () => {
     console.log('AdminDashboard: Cargando canjes pendientes...');
     try {
@@ -285,6 +363,7 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
     loadPendingRedemptions();
     if (activeTab === 'history') {
       loadHistoryVisits();
+      loadApprovedRedemptions();
     }
   }, { interval: 5000, enabled: true });
 
@@ -294,13 +373,40 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
     loadPendingRedemptions();
     if (activeTab === 'history') {
       loadHistoryVisits();
+      loadApprovedRedemptions();
     }
-  }, [loadPendingVisits, loadMetrics, loadHistoryVisits, loadPendingRedemptions, activeTab]);
+  }, [loadPendingVisits, loadMetrics, loadHistoryVisits, loadPendingRedemptions, loadApprovedRedemptions, activeTab]);
 
   const handleApproveVisit = async (visitId: string) => {
+    // Prevenir doble ejecución
+    if (processingVisit === visitId) {
+      console.log('AdminDashboard: Ya se está procesando esta visita:', visitId);
+      return;
+    }
+    
     setProcessingVisit(visitId);
     console.log('AdminDashboard: Aprobando visita:', visitId);
     try {
+      // Verificar primero que la estampa esté en estado 'pending'
+      const { data: existingStamp, error: checkError } = await supabase
+        .from('stamps')
+        .select('id, status')
+        .eq('id', visitId)
+        .single();
+
+      if (checkError) {
+        throw checkError;
+      }
+
+      if (existingStamp.status !== 'pending') {
+        console.log('AdminDashboard: La estampa ya fue procesada:', existingStamp.status);
+        alert('Esta estampa ya fue procesada anteriormente.');
+        await loadPendingVisits();
+        await loadMetrics();
+        return;
+      }
+
+      // Actualizar solo si está en estado 'pending'
       const { data, error } = await supabase
         .from('stamps')
         .update({
@@ -308,11 +414,20 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
           collected_by: userId,
         })
         .eq('id', visitId)
+        .eq('status', 'pending') // Solo actualizar si está pendiente
         .select();
 
       if (error) {
         console.error('AdminDashboard: Error al aprobar:', error);
         throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('AdminDashboard: No se pudo actualizar la estampa - posiblemente ya fue procesada');
+        alert('Esta estampa ya fue procesada por otro administrador.');
+        await loadPendingVisits();
+        await loadMetrics();
+        return;
       }
 
       console.log('AdminDashboard: Visita aprobada exitosamente:', data);
@@ -401,6 +516,9 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
       console.log(`AdminDashboard: Canje aprobado exitosamente. current_stamps será recalculado automáticamente por el trigger`);
 
       await loadPendingRedemptions();
+      if (activeTab === 'history') {
+        await loadApprovedRedemptions();
+      }
       await loadMetrics();
     } catch (error: any) {
       console.error('AdminDashboard: Error approving redemption:', error);
@@ -432,6 +550,9 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
       console.log('AdminDashboard: Canje rechazado exitosamente');
 
       await loadPendingRedemptions();
+      if (activeTab === 'history') {
+        await loadApprovedRedemptions();
+      }
       await loadMetrics();
     } catch (error: any) {
       console.error('AdminDashboard: Error rejecting redemption:', error);
@@ -678,76 +799,130 @@ export default function AdminDashboard({ userId }: AdminDashboardProps) {
           </>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">
-                Historial de Visitas
-              </h3>
-              <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-                {historyVisits.length} TOTAL
-              </span>
-            </div>
-            <div className="space-y-4">
-              {historyVisits.length === 0 ? (
-                <div className="bg-forest/40 rounded-2xl p-8 border-2 dotted-border text-center">
-                  <span className="material-symbols-outlined text-6xl text-primary/30 mb-4 block">
-                    history
-                  </span>
-                  <p className="text-primary/60 text-sm font-sans">
-                    No hay visitas en el historial
-                  </p>
-                </div>
-              ) : (
-                historyVisits.map((visit) => {
-                  const visitStatus = (visit as any).status || 'approved';
-                  const isApproved = visitStatus === 'approved';
-                  const isRejected = visitStatus === 'rejected';
-                  
-                  return (
-                    <div
-                      key={visit.id}
-                      className={`bg-forest/40 rounded-2xl p-5 border-2 dotted-border relative overflow-hidden ${
-                        isApproved ? 'border-primary/50' : isRejected ? 'border-red-400/30 opacity-75' : ''
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`size-10 rounded-full bg-background-dark flex items-center justify-center border ${
-                            isApproved ? 'border-primary/30' : 'border-red-400/30'
-                          }`}>
-                            <span className={`material-symbols-outlined text-xl ${
-                              isApproved ? 'text-primary' : 'text-red-400'
-                            }`}>
-                              {isApproved ? 'check_circle' : 'cancel'}
-                            </span>
-                          </div>
-                          <div>
-                            <h4 className="header-text text-sm font-bold text-primary">
-                              {visit.user_name || 'Usuario Desconocido'}
-                            </h4>
-                            <p className="text-[10px] text-primary/50 uppercase tracking-tighter">
-                              ID: {visit.member_number || visit.user_id.substring(0, 5)} • {formatTimeAgo(visit.created_at)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="header-text text-sm font-bold text-primary">
-                            {formatCurrency(visit.amount)}
-                          </p>
-                          <p className={`text-[10px] italic ${
-                            isApproved ? 'text-primary/60' : 'text-red-400/70'
-                          }`}>
-                            {isApproved ? '✓ Aprobado' : '✗ Rechazado'}
-                          </p>
-                          <p className="text-[10px] text-primary/50 mt-1">
-                            Local: {visit.location_code?.toUpperCase() || 'N/A'}
-                          </p>
-                        </div>
+            {(() => {
+              // Combinar visitas y canjes realizados, ordenados por fecha
+              const allHistoryItems = [
+                ...historyVisits.map(visit => ({ type: 'visit' as const, data: visit, date: visit.created_at })),
+                ...approvedRedemptions.map(redemption => ({ type: 'redemption' as const, data: redemption, date: redemption.created_at }))
+              ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/60">
+                      Historial
+                    </h3>
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                      {allHistoryItems.length} TOTAL
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    {allHistoryItems.length === 0 ? (
+                      <div className="bg-forest/40 rounded-2xl p-8 border-2 dotted-border text-center">
+                        <span className="material-symbols-outlined text-6xl text-primary/30 mb-4 block">
+                          history
+                        </span>
+                        <p className="text-primary/60 text-sm font-sans">
+                          No hay historial
+                        </p>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    ) : (
+                      allHistoryItems.map((item) => {
+                        if (item.type === 'visit') {
+                          const visit = item.data as PendingVisit;
+                          const visitStatus = (visit as any).status || 'approved';
+                          const isApproved = visitStatus === 'approved';
+                          const isRejected = visitStatus === 'rejected';
+                          
+                          return (
+                            <div
+                              key={`visit-${visit.id}`}
+                              className={`bg-forest/40 rounded-2xl p-5 border-2 dotted-border relative overflow-hidden ${
+                                isApproved ? 'border-primary/50' : isRejected ? 'border-red-400/30 opacity-75' : ''
+                              }`}
+                            >
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`size-10 rounded-full bg-background-dark flex items-center justify-center border ${
+                                    isApproved ? 'border-primary/30' : 'border-red-400/30'
+                                  }`}>
+                                    <span className={`material-symbols-outlined text-xl ${
+                                      isApproved ? 'text-primary' : 'text-red-400'
+                                    }`}>
+                                      {isApproved ? 'check_circle' : 'cancel'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <h4 className="header-text text-sm font-bold text-primary">
+                                      {visit.user_name || 'Usuario Desconocido'}
+                                    </h4>
+                                    <p className="text-[10px] text-primary/50 uppercase tracking-tighter">
+                                      ID: {visit.member_number || visit.user_id.substring(0, 5)} • {formatTimeAgo(visit.created_at)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="header-text text-sm font-bold text-primary">
+                                    {formatCurrency(visit.amount)}
+                                  </p>
+                                  <p className={`text-[10px] italic ${
+                                    isApproved ? 'text-primary/60' : 'text-red-400/70'
+                                  }`}>
+                                    {isApproved ? '✓ Aprobado' : '✗ Rechazado'}
+                                  </p>
+                                  <p className="text-[10px] text-primary/50 mt-1">
+                                    Local: {visit.location_code?.toUpperCase() || 'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          const redemption = item.data as PendingRedemption;
+                          return (
+                            <div
+                              key={`redemption-${redemption.id}`}
+                              className="bg-forest/40 rounded-2xl p-5 border-2 dotted-border border-primary/50 relative overflow-hidden"
+                            >
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="size-10 rounded-full bg-background-dark flex items-center justify-center border border-primary/30">
+                                    <span className="material-symbols-outlined text-xl text-primary">
+                                      {redemption.reward_icon || 'redeem'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <h4 className="header-text text-sm font-bold text-primary">
+                                      {redemption.user_name || 'Usuario Desconocido'}
+                                    </h4>
+                                    <p className="text-[10px] text-primary/50 uppercase tracking-tighter">
+                                      ID: {redemption.member_number || redemption.user_id.substring(0, 5)} • {formatTimeAgo(redemption.created_at)}
+                                    </p>
+                                    <p className="text-xs text-primary/70 font-sans mt-1">
+                                      <span className="material-symbols-outlined text-xs align-middle">redeem</span>
+                                      {' '}
+                                      {redemption.reward_name || 'Recompensa'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] text-primary/60 italic">
+                                    ✓ Canje Aprobado
+                                  </p>
+                                  <p className="text-[10px] text-primary/50 mt-1">
+                                    {redemption.required_stamps || 0} sellos
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                      })
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </>
         )}
       </main>
