@@ -27,6 +27,18 @@ export const metadata: Metadata = {
   description: 'Sistema de tarjeta de fidelización con recompensas',
   // Next.js 14 genera automáticamente /manifest.webmanifest desde app/manifest.ts
   manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -36,8 +48,6 @@ export const metadata: Metadata = {
   other: {
     'mobile-web-app-capable': 'yes',
   },
-  // Remover referencias a iconos que no existen para evitar 404s
-  // Los iconos se manejan en app/manifest.ts
 };
 
 // Separar viewport y themeColor según Next.js 14
