@@ -340,11 +340,11 @@ export default function ScannerButton({ userId }: ScannerButtonProps) {
       {!scanning ? (
         // Vista inicial: Botón para iniciar escáner
         <>
-          <div className="vintage-seal mb-6">
+          <div className="vintage-seal mb-6 cursor-pointer" onClick={handleScanClick}>
             <div className="w-48 h-48 bg-center bg-no-repeat bg-contain flex items-center justify-center">
               <button
                 onClick={handleScanClick}
-                className="size-48 rounded-full border-4 border-primary p-4 bg-primary/10 hover:bg-primary/20 transition-all flex flex-col items-center justify-center gap-4"
+                className="size-48 rounded-full border-4 border-primary p-4 bg-primary/10 hover:bg-primary/20 transition-all flex flex-col items-center justify-center gap-4 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-6xl text-primary">
                   qr_code_scanner
