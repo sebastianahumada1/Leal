@@ -131,15 +131,8 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
         return;
       }
 
-      // Verificar si ya canjeó esta recompensa (aprobada)
-      const alreadyRedeemed = userRewards.find(
-        (ur) => ur.reward_id === reward.id && (ur as any).status === 'approved'
-      );
-      if (alreadyRedeemed) {
-        alert('Ya has canjeado esta recompensa');
-        setRedeemingReward(null);
-        return;
-      }
+      // Permitir canjear la misma recompensa múltiples veces si tiene sellos suficientes
+      // (se eliminó la validación de already redeemed)
 
       // Crear solicitud de canje pendiente (no se marca redeemed_at hasta que se apruebe)
       const { error } = await supabase.from('user_rewards').insert({
