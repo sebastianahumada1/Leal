@@ -246,14 +246,15 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
               </div>
             ) : (
               availableRewards.map((reward) => {
-              const userReward = userRewards.find((ur) => ur.reward_id === reward.id);
-              const rewardStatus = (userReward as any)?.status || null;
-              const isRedeemed = rewardStatus === 'approved';
-              const isPending = rewardStatus === 'pending';
-              const isRejected = rewardStatus === 'rejected';
+              // Buscar solo solicitudes pendientes (no aprobadas ni rechazadas)
+              const pendingUserReward = userRewards.find((ur) => ur.reward_id === reward.id && (ur as any).status === 'pending');
+              const isPending = !!pendingUserReward;
               
-              // Puede canjear si tiene suficientes sellos, no está ya aprobada, y no hay solicitud pendiente
-              const canRedeem = approvedStampsCount >= reward.required_stamps && !isRedeemed && !isPending;
+              // Contar cuántas veces ha canjeado esta recompensa (aprobadas)
+              const timesRedeemed = userRewards.filter((ur) => ur.reward_id === reward.id && (ur as any).status === 'approved').length;
+              
+              // Puede canjear si tiene suficientes sellos y no hay solicitud pendiente
+              const canRedeem = approvedStampsCount >= reward.required_stamps && !isPending;
               
               const progress = Math.min((approvedStampsCount / reward.required_stamps) * 100, 100);
               const stampsNeeded = Math.max(0, reward.required_stamps - approvedStampsCount);
@@ -283,20 +284,16 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
                           canRedeem ? 'text-primary' : isPending ? 'text-primary/80' : 'text-primary/60'
                         }`}
                       >
-                        {isRedeemed
-                          ? 'Ya canjeada'
-                          : isPending
+                        {isPending
                           ? 'Pendiente de aprobación'
-                          : isRejected
-                          ? 'Canje rechazado - Intenta de nuevo'
                           : canRedeem
-                          ? '¡Listo para canjear!'
+                          ? timesRedeemed > 0 ? `Canjeada ${timesRedeemed}x - ¡Canjear otra vez!` : '¡Listo para canjear!'
                           : stampsNeeded > 0
                           ? `Te faltan ${stampsNeeded} sellos`
                           : 'Faltan sellos'}
                       </span>
                       <span
-                        className={`text-xs font-bold ${canRedeem && !isRedeemed ? 'text-primary' : 'text-primary/60'}`}
+                        className={`text-xs font-bold ${canRedeem ? 'text-primary' : 'text-primary/60'}`}
                       >
                         {Math.min(approvedStampsCount, reward.required_stamps)}/{reward.required_stamps}
                       </span>
@@ -307,15 +304,7 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
                         style={{ width: `${progress}%` }}
                       ></div>
                     </div>
-                    {isRedeemed ? (
-                      <button
-                        disabled
-                        className="w-full mt-2 border border-primary/40 py-3 flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
-                      >
-                        <span className="material-symbols-outlined text-primary/60 text-lg">check_circle</span>
-                        <span className="header-text text-primary/60 text-sm font-bold">YA CANJEADA</span>
-                      </button>
-                    ) : isPending ? (
+                    {isPending ? (
                       <button
                         disabled
                         className="w-full mt-2 border border-primary/40 py-3 flex items-center justify-center gap-2 opacity-70 cursor-not-allowed"
