@@ -131,8 +131,15 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
         return;
       }
 
-      // Permitir canjear la misma recompensa múltiples veces si tiene sellos suficientes
-      // (se eliminó la validación de already redeemed)
+      // Verificar si ya fue reclamada esta recompensa (solo se puede reclamar una vez)
+      const alreadyRedeemed = userRewards.find(
+        (ur) => ur.reward_id === reward.id && (ur as any).status === 'approved'
+      );
+      if (alreadyRedeemed) {
+        alert('Esta recompensa ya fue reclamada. Solo se puede reclamar una vez.');
+        setRedeemingReward(null);
+        return;
+      }
 
       // Crear solicitud de canje pendiente (no se marca redeemed_at hasta que se apruebe)
       const { error } = await supabase.from('user_rewards').insert({
@@ -250,11 +257,12 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
               const pendingUserReward = userRewards.find((ur) => ur.reward_id === reward.id && (ur as any).status === 'pending');
               const isPending = !!pendingUserReward;
               
-              // Contar cuántas veces ha canjeado esta recompensa (aprobadas)
-              const timesRedeemed = userRewards.filter((ur) => ur.reward_id === reward.id && (ur as any).status === 'approved').length;
+              // Verificar si ya fue reclamada esta recompensa (solo se puede reclamar una vez)
+              const alreadyRedeemed = userRewards.find((ur) => ur.reward_id === reward.id && (ur as any).status === 'approved');
+              const isRedeemed = !!alreadyRedeemed;
               
-              // Puede canjear si tiene suficientes sellos y no hay solicitud pendiente
-              const canRedeem = approvedStampsCount >= reward.required_stamps && !isPending;
+              // Puede canjear si tiene suficientes sellos, no hay solicitud pendiente y no fue reclamada antes
+              const canRedeem = approvedStampsCount >= reward.required_stamps && !isPending && !isRedeemed;
               
               const progress = Math.min((approvedStampsCount / reward.required_stamps) * 100, 100);
               const stampsNeeded = Math.max(0, reward.required_stamps - approvedStampsCount);
@@ -281,13 +289,15 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
                     <div className="flex justify-between items-end mb-1">
                       <span
                         className={`text-[10px] uppercase font-bold tracking-widest ${
-                          canRedeem ? 'text-primary' : isPending ? 'text-primary/80' : 'text-primary/60'
+                          canRedeem ? 'text-primary' : isPending ? 'text-primary/80' : isRedeemed ? 'text-primary/60' : 'text-primary/60'
                         }`}
                       >
                         {isPending
                           ? 'Pendiente de aprobación'
+                          : isRedeemed
+                          ? 'Ya reclamada'
                           : canRedeem
-                          ? timesRedeemed > 0 ? `Canjeada ${timesRedeemed}x - ¡Canjear otra vez!` : '¡Listo para canjear!'
+                          ? '¡Listo para canjear!'
                           : stampsNeeded > 0
                           ? `Te faltan ${stampsNeeded} sellos`
                           : 'Faltan sellos'}
@@ -311,6 +321,14 @@ export default function RewardsPage({ userId }: RewardsPageProps) {
                       >
                         <span className="material-symbols-outlined text-primary/60 text-lg animate-spin">hourglass_empty</span>
                         <span className="header-text text-primary/80 text-sm font-bold">ESPERANDO APROBACIÓN</span>
+                      </button>
+                    ) : isRedeemed ? (
+                      <button
+                        disabled
+                        className="w-full mt-2 border border-primary/40 py-3 flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+                      >
+                        <span className="material-symbols-outlined text-primary/60 text-lg">check_circle</span>
+                        <span className="header-text text-primary/60 text-sm font-bold">YA RECLAMADA</span>
                       </button>
                     ) : canRedeem ? (
                       <button
